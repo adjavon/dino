@@ -105,7 +105,9 @@ if __name__ == '__main__':
     parser.add_argument("--checkpoint_key", default="teacher", type=str,
         help='Key to use in the checkpoint (example: "teacher")')
     parser.add_argument("--image_path", default=None, type=str, help="Path of the image to load.")
-    parser.add_argument("--image_size", default=(480, 480), type=int, nargs="+", help="Resize image.")
+    parser.add_argument("--image_size", default=(224, 224), type=int, nargs="+", help="Resize image.")
+    parser.add_argument("--mean", default=[0.485, 0.456, 0.406], type=float, nargs="+", help="Mean of dataset.")
+    parser.add_argument("--std", default=[0.229, 0.224, 0.225], type=float, nargs="+", help="Std of dataset.")
     parser.add_argument('--output_dir', default='.', help='Path where to save visualizations.')
     parser.add_argument("--threshold", type=float, default=None, help="""We visualize masks
         obtained by thresholding the self-attention maps to keep xx% of the mass.""")
@@ -165,7 +167,7 @@ if __name__ == '__main__':
     transform = pth_transforms.Compose([
         pth_transforms.Resize(args.image_size),
         pth_transforms.ToTensor(),
-        pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        pth_transforms.Normalize(args.mean, args.std),
     ])
     img = transform(img)
 
@@ -204,7 +206,7 @@ if __name__ == '__main__':
     torchvision.utils.save_image(torchvision.utils.make_grid(img, normalize=True, scale_each=True), os.path.join(args.output_dir, "img.png"))
     for j in range(nh):
         fname = os.path.join(args.output_dir, "attn-head" + str(j) + ".png")
-        plt.imsave(fname=fname, arr=attentions[j], format='png')
+        plt.imsave(fname=fname, arr=attentions[j], format='png', cmap='gray')
         print(f"{fname} saved.")
 
     if args.threshold is not None:

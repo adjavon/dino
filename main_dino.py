@@ -57,6 +57,10 @@ def get_args_parser():
         help="""Name of architecture to train. For quick experiments with ViTs,
         we recommend using vit_tiny or vit_small.""",
     )
+    parser.add_argument("--image_size", default=224, type=int, help="Image size.")
+    parser.add_argument(
+        "--in_chans", default=3, type=int, help="Number of input channels."
+    )
     parser.add_argument(
         "--patch_size",
         default=16,
@@ -228,6 +232,9 @@ def get_args_parser():
         help="""Scale range of the cropped image before resizing, relatively to the origin image.
         Used for small local view cropping of multi-crop.""",
     )
+    parser.add_argument("--mean", type=float, nargs="+", default=[0.485, 0.456, 0.406])
+    parser.add_argument("--std", type=float, nargs="+", default=[0.229, 0.224, 0.225])
+    parser.add_argument("--p_grayscale", type=float, default=0.2)
 
     # Misc
     parser.add_argument(
@@ -257,7 +264,7 @@ def get_args_parser():
         distributed training; see https://pytorch.org/docs/stable/distributed.html""",
     )
     parser.add_argument(
-        "--local_rank",
+        "--local-rank",
         default=0,
         type=int,
         help="Please ignore and do not set this argument.",
@@ -279,6 +286,10 @@ def train_dino(args):
         args.global_crops_scale,
         args.local_crops_scale,
         args.local_crops_number,
+        image_size=args.image_size,
+        mean=args.mean, 
+        std=args.std, 
+        p_grayscale=args.p_grayscale
     )
     dataset = datasets.ImageFolder(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
@@ -300,8 +311,11 @@ def train_dino(args):
         student = vits.__dict__[args.arch](
             patch_size=args.patch_size,
             drop_path_rate=args.drop_path_rate,  # stochastic depth
+            in_chans=args.in_chans,
         )
-        teacher = vits.__dict__[args.arch](patch_size=args.patch_size)
+        teacher = vits.__dict__[args.arch](
+            patch_size=args.patch_size, in_chans=args.in_chans
+        )
         embed_dim = student.embed_dim
     # if the network is a XCiT
     elif args.arch in torch.hub.list("facebookresearch/xcit:main"):
@@ -361,8 +375,8 @@ def train_dino(args):
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
         args.out_dim,
-        args.local_crops_number
-        + 2,  # total number of crops = 2 global crops + local_crops_number
+        # total number of crops = 2 global crops + local_crops_number
+        args.local_crops_number + 2,  
         args.warmup_teacher_temp,
         args.teacher_temp,
         args.warmup_teacher_temp_epochs,
@@ -624,6 +638,7 @@ class DataAugmentationDINO(object):
         cropped_image_size=96,
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        p_grayscale=0.2,
     ):
         flip_and_color_jitter = transforms.Compose(
             [
@@ -636,7 +651,7 @@ class DataAugmentationDINO(object):
                     ],
                     p=0.8,
                 ),
-                transforms.RandomGrayscale(p=0.2),
+                transforms.RandomGrayscale(p=p_grayscale),
             ]
         )
         normalize = transforms.Compose(
@@ -674,7 +689,9 @@ class DataAugmentationDINO(object):
         self.local_transfo = transforms.Compose(
             [
                 transforms.RandomResizedCrop(
-                    cropped_image_size, scale=local_crops_scale, interpolation=Image.BICUBIC
+                    cropped_image_size,
+                    scale=local_crops_scale,
+                    interpolation=Image.BICUBIC,
                 ),
                 flip_and_color_jitter,
                 utils.GaussianBlur(p=0.5),
