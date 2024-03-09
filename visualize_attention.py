@@ -30,6 +30,7 @@ import torchvision
 from torchvision import transforms as pth_transforms
 import numpy as np
 from PIL import Image
+from pathlib import Path
 
 import utils
 import vision_transformer as vits
@@ -202,14 +203,16 @@ if __name__ == '__main__':
     attentions = nn.functional.interpolate(attentions.unsqueeze(0), scale_factor=args.patch_size, mode="nearest")[0].cpu().numpy()
 
     # save attentions heatmaps
-    os.makedirs(args.output_dir, exist_ok=True)
-    torchvision.utils.save_image(torchvision.utils.make_grid(img, normalize=True, scale_each=True), os.path.join(args.output_dir, "img.png"))
+    image_name = Path(args.image_path).stem
+    output_dir = os.path.join(args.output_dir, image_name)
+    os.makedirs(output_dir, exist_ok=True)
+    torchvision.utils.save_image(torchvision.utils.make_grid(img, normalize=True, scale_each=True), os.path.join(output_dir, "img.png"))
     for j in range(nh):
-        fname = os.path.join(args.output_dir, "attn-head" + str(j) + ".png")
+        fname = os.path.join(output_dir, "attn-head" + str(j) + ".png")
         plt.imsave(fname=fname, arr=attentions[j], format='png', cmap='gray')
         print(f"{fname} saved.")
 
     if args.threshold is not None:
-        image = skimage.io.imread(os.path.join(args.output_dir, "img.png"))
+        image = skimage.io.imread(os.path.join(output_dir, "img.png"))
         for j in range(nh):
-            display_instances(image, th_attn[j], fname=os.path.join(args.output_dir, "mask_th" + str(args.threshold) + "_head" + str(j) +".png"), blur=False)
+            display_instances(image, th_attn[j], fname=os.path.join(output_dir, "mask_th" + str(args.threshold) + "_head" + str(j) +".png"), blur=False)
